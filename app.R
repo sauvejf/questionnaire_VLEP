@@ -49,7 +49,8 @@ substances <- load_substances(SUBSTANCES_FILE)
 agents <- substances$NAME_FR
 
 # ---- CONFIG (survey) ----
-oel_lists <- c("France", "ACGIH", "MAK", "JSOH", "WEEL")
+# Added "Autre"
+oel_lists <- c("France", "ACGIH", "MAK", "JSOH", "WEEL", "Autre")
 
 units <- c("mg/m3", "ppm", "\u00B5g/m3", "mg/L")
 unit_choices <- c("\u2014 S\u00E9lectionner une unit\u00E9 \u2014" = "", setNames(units, units))
@@ -111,6 +112,12 @@ ui <- fluidPage(
         border: 1px dashed #ddd;
       }
       .toc-tools { margin-top: 8px; }
+
+      .required-warn {
+        color: #b00020;
+        margin-top: 4px;
+        font-size: 0.85em;
+      }
     "))
   ),
   
@@ -148,6 +155,7 @@ server <- function(input, output, session) {
       lapply(seq_along(agents), function(i) {
         
         lists_input <- paste0("lists_", i)
+        other_input <- paste0("other_", i)  # NEW
         oel_value_input <- paste0("oel_value_", i)
         unit_input <- paste0("unit_", i)
         scale_input <- paste0("scale_", i)
@@ -184,6 +192,18 @@ server <- function(input, output, session) {
             label = NULL,
             choices = oel_lists,
             inline = TRUE
+          ),
+          
+          # NEW: if "Autre" selected, require text
+          conditionalPanel(
+            condition = sprintf("input['%s'] && input['%s'].includes('Autre')", lists_input, lists_input),
+            textInput(
+              inputId = other_input,
+              label = "Si « Autre », préciser (obligatoire)",
+              value = "",
+              placeholder = "Ex : NIOSH, SUVA, entreprise X, littérature…"
+            ),
+            tags$div(class = "required-warn", "Champ obligatoire si « Autre » est coché.")
           ),
           
           conditionalPanel(
@@ -256,11 +276,12 @@ server <- function(input, output, session) {
   observe({
     lapply(seq_along(agents), function(i) {
       values$data[[i]] <- list(
-        lists     = input[[paste0("lists_", i)]],
-        oel_value = input[[paste0("oel_value_", i)]],
-        unit      = input[[paste0("unit_", i)]],     # "" until selected
-        scale     = input[[paste0("scale_", i)]],
-        comment   = input[[paste0("comment_", i)]]
+        lists      = input[[paste0("lists_", i)]],
+        other_text = input[[paste0("other_", i)]],   # NEW
+        oel_value  = input[[paste0("oel_value_", i)]],
+        unit       = input[[paste0("unit_", i)]],    # "" until selected
+        scale      = input[[paste0("scale_", i)]],
+        comment    = input[[paste0("comment_", i)]]
       )
     })
   })
@@ -276,7 +297,14 @@ server <- function(input, output, session) {
       val_num <- suppressWarnings(as.numeric(v$oel_value))
       val_ok <- !is.null(v$oel_value) && !is.na(val_num) && is.finite(val_num)
       unit_ok <- !is.null(v$unit) && nzchar(trimws(v$unit))
-      return(val_ok && unit_ok)
+      
+      autre_selected <- "Autre" %in% lists
+      autre_ok <- TRUE
+      if (autre_selected) {
+        autre_ok <- !is.null(v$other_text) && nzchar(trimws(v$other_text))
+      }
+      
+      return(val_ok && unit_ok && autre_ok)
     }
     
     return(!is.null(v$scale) && nzchar(trimws(as.character(v$scale))))
@@ -316,6 +344,7 @@ server <- function(input, output, session) {
       if (is.null(v)) return()
       
       updateCheckboxGroupInput(session, paste0("lists_", i), selected = v$lists %||% character(0))
+      updateTextInput(session, paste0("other_", i), value = v$other_text %||% "")  # NEW
       updateNumericInput(session, paste0("oel_value_", i), value = v$oel_value %||% NA)
       
       restored_unit <- v$unit %||% ""
@@ -331,12 +360,12 @@ server <- function(input, output, session) {
   # ---- Build results (Excel) with binary OEL columns + substance identifiers ----
   build_results <- reactive({
     rows <- lapply(seq_along(agents), function(i) {
-      v <- values$data[[i]] %||% list(lists=NULL, oel_value=NA, unit="", scale="", comment="")
+      v <- values$data[[i]] %||% list(lists=NULL, other_text="", oel_value=NA, unit="", scale="", comment="")
       
       lists <- v$lists %||% character(0)
       has_list <- length(lists) > 0
       
-      # binary columns for each OEL list
+      # binary columns for each OEL list (incl. Autre)
       bin_cols <- as.list(setNames(oel_lists %in% lists, oel_lists))
       
       scale <- if (!has_list) (v$scale %||% "") else ""
@@ -353,6 +382,8 @@ server <- function(input, output, session) {
         cas_id            = nr(substances$CAS[i]),
         
         bin_cols,
+        
+        autre_details = if ("Autre" %in% lists) (v$other_text %||% "") else "",
         
         oel_value   = suppressWarnings(as.numeric(if (has_list) v$oel_value else NA)),
         oel_unit    = if (has_list) (v$unit %||% "") else "",
