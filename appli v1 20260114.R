@@ -201,7 +201,7 @@ server <- function(input, output, session) {
               inputId = other_input,
               label = "Si « Autre », préciser (obligatoire)",
               value = "",
-              placeholder = "Ex : NIOSH, SUVA, entreprise X, littérature…"
+              placeholder = "Ex : NIOSH, SUVA, littérature…"
             ),
             tags$div(class = "required-warn", "Champ obligatoire si « Autre » est coché.")
           ),
@@ -229,7 +229,7 @@ server <- function(input, output, session) {
             condition = sprintf("!input['%s'] || input['%s'].length === 0", lists_input, lists_input),
             radioButtons(
               inputId = scale_input,
-              label = "Sélectionnez une plage de concentrations (1–5)",
+              label = "Sélectionnez une bande de danger",
               choices = 1:5,
               selected = character(0),
               inline = TRUE
