@@ -147,10 +147,14 @@ ui <- fluidPage(
     tags$hr(),
     tags$div(
       class = "toc-tools",
-      fileInput("load_session", "Reprendre (.rds)", accept = ".rds"),
-      downloadButton("save_session", "Sauvegarder (.rds)"),
+      downloadButton("save_session", "Sauvegarder l'enquête en cours"),
+      fileInput("load_session", "Reprendre l'enquête (.rds)", accept = ".rds"),
       tags$br(),
-      downloadButton("download_xlsx", "Télécharger le fichier Excel")
+      tags$p(
+        class = "toc-note",
+        "Veuillez cliquer sur le bouton ci-dessous uniquement lorsque l’enquête est entièrement complétée, afin de transmettre vos réponses."
+      ),
+      downloadButton("download_xlsx", "Télécharger l’enquête complétée")
     )
   ),
   
