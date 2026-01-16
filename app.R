@@ -31,10 +31,8 @@ load_substances <- function(path) {
     ))
   }
   
-  # Keep only required columns (plus tolerant to extra columns)
   df <- df[, required, drop = FALSE]
   
-  # Drop rows without NAME_FR (cannot show substance without name)
   df$NAME_FR <- as.character(df$NAME_FR)
   df <- df[!(is.na(df$NAME_FR) | trimws(df$NAME_FR) == ""), , drop = FALSE]
   
@@ -44,12 +42,9 @@ load_substances <- function(path) {
 }
 
 substances <- load_substances(SUBSTANCES_FILE)
-
-# Dynamic agents list (names displayed)
 agents <- substances$NAME_FR
 
 # ---- CONFIG (survey) ----
-# Added "Autre"
 oel_lists <- c("France", "ACGIH", "MAK", "JSOH", "WEEL", "Autre")
 
 units <- c("mg/m3", "ppm", "\u00B5g/m3", "mg/L")
@@ -94,6 +89,7 @@ ui <- fluidPage(
         #toc { position: static; width: 100%; max-height: none; }
       }
 
+      /* Base block style */
       .agent-block {
         padding: 14px;
         border: 1px solid #eee;
@@ -101,9 +97,29 @@ ui <- fluidPage(
         margin-bottom: 14px;
         background: #fafafa;
       }
+
+      /* Alternate pale tint */
+      .agent-block.alt {
+        background: #f2f7ff; /* pale blue tint */
+        border-color: #e1ecff;
+      }
+
       .agent-title { margin-top: 0; margin-bottom: 6px; }
-      .subline { margin: 0 0 6px 0; color: #444; }
-      .idline { margin: 0 0 10px 0; color: #555; }
+
+      /* Increased font size for synonyms + IDs */
+      .subline {
+        margin: 0 0 6px 0;
+        color: #444;
+        font-size: 1.25em;
+        line-height: 1.25em;
+      }
+      .idline {
+        margin: 0 0 10px 0;
+        color: #555;
+        font-size: 1.25em;
+        line-height: 1.25em;
+      }
+
       .label-box {
         margin-top: 8px;
         padding: 10px;
@@ -146,23 +162,20 @@ ui <- fluidPage(
 # =========================
 server <- function(input, output, session) {
   
-  # Store responses (supports save/load)
   values <- reactiveValues(data = vector("list", length(agents)))
   
-  # ---- Agents UI ----
   output$agents_ui <- renderUI({
     tagList(
       lapply(seq_along(agents), function(i) {
         
         lists_input <- paste0("lists_", i)
-        other_input <- paste0("other_", i)  # NEW
+        other_input <- paste0("other_", i)
         oel_value_input <- paste0("oel_value_", i)
         unit_input <- paste0("unit_", i)
         scale_input <- paste0("scale_", i)
         scale_label_output <- paste0("scale_label_", i)
         comment_input <- paste0("comment_", i)
         
-        # substance info
         syn <- as.character(substances$SYN_FR[i])
         syn_has <- !(is.na(syn) || trimws(syn) == "")
         
@@ -170,17 +183,17 @@ server <- function(input, output, session) {
         ec  <- nr(substances$EC[i])
         cas <- nr(substances$CAS[i])
         
+        # Alternate block class
+        block_class <- if (i %% 2 == 0) "agent-block alt" else "agent-block"
+        
         tags$div(
           id = agent_id(i),
-          class = "agent-block",
+          class = block_class,
           
-          # Ligne 1: NAME_FR (also used in TOC)
           tags$h3(class = "agent-title", paste0(i, ". ", agents[i])),
           
-          # Ligne 2: SYN_FR only if present, smaller
           if (syn_has) tags$p(class = "subline", tags$small(paste0("Synonymes : ", syn))),
           
-          # Ligne 3: IDs with "non renseignés" if blank
           tags$p(
             class = "idline",
             tags$small(paste0("# index : ", idx, "  |  # EC : ", ec, "  |  # CAS : ", cas))
@@ -194,14 +207,13 @@ server <- function(input, output, session) {
             inline = TRUE
           ),
           
-          # NEW: if "Autre" selected, require text
           conditionalPanel(
             condition = sprintf("input['%s'] && input['%s'].includes('Autre')", lists_input, lists_input),
             textInput(
               inputId = other_input,
               label = "Si « Autre », préciser (obligatoire)",
               value = "",
-              placeholder = "Ex : NIOSH, SUVA, littérature…"
+              placeholder = "Ex : NIOSH, SUVA, entreprise X, littérature…"
             ),
             tags$div(class = "required-warn", "Champ obligatoire si « Autre » est coché.")
           ),
@@ -229,7 +241,7 @@ server <- function(input, output, session) {
             condition = sprintf("!input['%s'] || input['%s'].length === 0", lists_input, lists_input),
             radioButtons(
               inputId = scale_input,
-              label = "Sélectionnez une bande de danger",
+              label = "Sélectionnez une plage de concentrations (1–5)",
               choices = 1:5,
               selected = character(0),
               inline = TRUE
@@ -251,7 +263,6 @@ server <- function(input, output, session) {
     )
   })
   
-  # ---- Scale label display ----
   observe({
     lapply(seq_along(agents), function(i) {
       local({
@@ -272,21 +283,19 @@ server <- function(input, output, session) {
     })
   })
   
-  # ---- Persist current state ----
   observe({
     lapply(seq_along(agents), function(i) {
       values$data[[i]] <- list(
         lists      = input[[paste0("lists_", i)]],
-        other_text = input[[paste0("other_", i)]],   # NEW
+        other_text = input[[paste0("other_", i)]],
         oel_value  = input[[paste0("oel_value_", i)]],
-        unit       = input[[paste0("unit_", i)]],    # "" until selected
+        unit       = input[[paste0("unit_", i)]],
         scale      = input[[paste0("scale_", i)]],
         comment    = input[[paste0("comment_", i)]]
       )
     })
   })
   
-  # ---- Strict completion logic for TOC ----
   is_done <- function(v) {
     if (is.null(v)) return(FALSE)
     
@@ -310,7 +319,6 @@ server <- function(input, output, session) {
     return(!is.null(v$scale) && nzchar(trimws(as.character(v$scale))))
   }
   
-  # ---- TOC with checkmarks (uses NAME_FR) ----
   output$toc_ui <- renderUI({
     tagList(
       lapply(seq_along(agents), function(i) {
@@ -321,19 +329,16 @@ server <- function(input, output, session) {
     )
   })
   
-  # ---- Save session (.rds) ----
   output$save_session <- downloadHandler(
     filename = function() paste0("enquete_VLEP_", format(Sys.Date(), "%Y-%m-%d"), ".rds"),
     content = function(file) saveRDS(values$data, file)
   )
   
-  # ---- Load session (.rds), tolerant to changed number of substances ----
   observeEvent(input$load_session, {
     req(input$load_session$datapath)
     restored <- readRDS(input$load_session$datapath)
     if (!is.list(restored)) return()
     
-    # If substances list length changed, adapt:
     restored2 <- vector("list", length(agents))
     n <- min(length(restored), length(restored2))
     restored2[seq_len(n)] <- restored[seq_len(n)]
@@ -344,7 +349,7 @@ server <- function(input, output, session) {
       if (is.null(v)) return()
       
       updateCheckboxGroupInput(session, paste0("lists_", i), selected = v$lists %||% character(0))
-      updateTextInput(session, paste0("other_", i), value = v$other_text %||% "")  # NEW
+      updateTextInput(session, paste0("other_", i), value = v$other_text %||% "")
       updateNumericInput(session, paste0("oel_value_", i), value = v$oel_value %||% NA)
       
       restored_unit <- v$unit %||% ""
@@ -357,7 +362,6 @@ server <- function(input, output, session) {
     })
   })
   
-  # ---- Build results (Excel) with binary OEL columns + substance identifiers ----
   build_results <- reactive({
     rows <- lapply(seq_along(agents), function(i) {
       v <- values$data[[i]] %||% list(lists=NULL, other_text="", oel_value=NA, unit="", scale="", comment="")
@@ -365,7 +369,6 @@ server <- function(input, output, session) {
       lists <- v$lists %||% character(0)
       has_list <- length(lists) > 0
       
-      # binary columns for each OEL list (incl. Autre)
       bin_cols <- as.list(setNames(oel_lists %in% lists, oel_lists))
       
       scale <- if (!has_list) (v$scale %||% "") else ""
@@ -399,7 +402,6 @@ server <- function(input, output, session) {
     do.call(rbind, rows)
   })
   
-  # ---- Excel download ----
   output$download_xlsx <- downloadHandler(
     filename = function() paste0("Reponses_enquete_VLEP_", format(Sys.Date(), "%Y-%m-%d"), ".xlsx"),
     content = function(file) {
