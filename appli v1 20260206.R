@@ -145,7 +145,7 @@ ui <- fluidPage(
       e.returnValue = ''; // triggers the browser's built-in confirm dialog
     });
   ")),
-  
+
   
   # Floating TOC
   tags$div(
