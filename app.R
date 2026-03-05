@@ -539,13 +539,17 @@ server <- function(input, output, session) {
       updateTextAreaInput(session, paste0("hpaste_", i),
                           value = v$hpaste_raw %||% paste(v$hcodes %||% character(0), collapse = "\n"))
       
-      # restore computed output
-      out0 <- compute_from_codes(v$hcodes %||% character(0))
-      if (length(out0$codes) == 0 && (length(v$hcodes %||% character(0)) == 0)) {
-        # if saved with no codes, you likely want fallback to BD=1
-        out0 <- fallback_bd1()
+      # Only restore computed output if bande_danger was actually saved (entry was completed)
+      saved_bd <- v$bande_danger %||% NA_integer_
+      if (!is.na(saved_bd)) {
+        out0 <- compute_from_codes(v$hcodes %||% character(0))
+        if (length(out0$codes) == 0 && (length(v$hcodes %||% character(0)) == 0)) {
+          # Fallback to BD=1 only if it was explicitly saved
+          out0 <- fallback_bd1()
+        }
+        haz[[paste0("out_", i)]] <- out0
       }
-      haz[[paste0("out_", i)]] <- out0
+      # If bande_danger is NA, leave haz[[...]] as NULL so entry remains incomplete
       
       updateTextAreaInput(session, paste0("comment_", i), value = v$comment %||% "")
     })
